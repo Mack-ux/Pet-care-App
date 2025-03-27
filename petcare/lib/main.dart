@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import 'db_helper.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'pet_details.dart';
 
 void main() {
-  sqfliteFfiInit();
-  databaseFactory = databaseFactoryFfi;
   runApp(PetApp());
 }
 

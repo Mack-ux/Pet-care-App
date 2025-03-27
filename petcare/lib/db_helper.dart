@@ -1,44 +1,59 @@
 import 'dart:io';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:sqflite/sqflite.dart' as sqflite;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 class DBHelper {
-  static Database? _database;
+  static sqflite.Database? _database;
   static const String tableName = 'pets';
 
-  Future<Database> get database async {
+  Future<sqflite.Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDB();
     return _database!;
   }
 
-  Future<Database> _initDB() async {
-    sqfliteFfiInit();
-    databaseFactoryOrNull = databaseFactoryFfi;
+  Future<sqflite.Database> _initDB() async {
+    final directory = await getApplicationDocumentsDirectory();
+    final path = join(directory.path, 'pets.db');
 
-    Directory documentsDirectory = await getApplicationDocumentsDirectory();
-    String path = join(documentsDirectory.path, 'pets.db');
-
-    // Prints db location
     print('Database Path: $path');
 
-    return await databaseFactory.openDatabase(
-      path,
-      options: OpenDatabaseOptions(
+    if (Platform.isWindows || Platform.isLinux) {
+      // Initialize FFI only on Windows/Linux
+      sqfliteFfiInit();
+      final db = await databaseFactoryFfi.openDatabase(path,
+        options: OpenDatabaseOptions(
+          version: 1,
+          onCreate: (db, version) async {
+            await db.execute(_createTableSQL());
+          },
+        ),
+      );
+      return db;
+    } else {
+      // On Android/iOS/macOS, use regular sqflite
+      final db = await sqflite.openDatabase(
+        path,
         version: 1,
         onCreate: (db, version) async {
-          await db.execute('''
-            CREATE TABLE $tableName (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              name TEXT NOT NULL,
-              type TEXT NOT NULL,
-              age INTEGER NOT NULL
-            )
-          ''');
+          await db.execute(_createTableSQL());
         },
-      ),
-    );
+      );
+      return db;
+    }
+  }
+
+  String _createTableSQL() {
+    return '''
+      CREATE TABLE $tableName (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        age INTEGER NOT NULL
+      )
+    ''';
   }
 
   Future<int> addPet(String name, String type, int age) async {
