@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'db_helper.dart';
+import 'foodwater.dart';
 
 class PetDetailsPage extends StatefulWidget {
   final int petId;
@@ -13,59 +14,30 @@ class PetDetailsPage extends StatefulWidget {
 class PetDetailsState extends State<PetDetailsPage> {
   final DBHelper dbHelper = DBHelper();
   Map<String, dynamic>? _pet;
+  final TextEditingController _reminderController = TextEditingController();
+  List<Map<String, dynamic>> _reminders = [];
   bool careTipsExpanded = false;
   bool illnessSymptomsExpanded = false;
 
-  // Care tips data
   final Map<String, List<String>> careTips = {
-    'Dog': [
-      'pee alot dog', 
-      'exccersie',
-      ],
-
-    'Cat': [
-      'feed it water', 
-      'celan litter box',
-      ],
-
-    'Bunny': [
-      'food', 
-      'clean',
-      ],
-
-    'Hamster': [
-      'hampter', 
-      'feed',
-      ],
+    'Dog': ['Walk the dog daily', 'Regular grooming'],
+    'Cat': ['Clean litter box', 'Provide scratching post'],
+    'Bunny': ['Give hay and space', 'Clean cage regularly'],
+    'Hamster': ['Use clean bedding', 'Provide wheel and chew toys'],
   };
 
-  // Illness symptoms data
   final Map<String, List<String>> illnessSymptoms = {
-    'Dog': [
-      'dgog', 
-      'listsysmtomsdaog',
-      ],
-
-    'Cat': [
-      'list of', 
-      'symtopms for cat',
-      ],
-
-    'Bunny': [
-      'symtom bunn', 
-      'symptom bunyn',
-      ],
-
-    'Hamster': [
-      'symtoms hamster', 
-      'symtoms hamster',
-      ],
+    'Dog': ['Vomiting', 'Itchy skin'],
+    'Cat': ['Hairballs', 'Lethargy'],
+    'Bunny': ['Runny nose', 'Overgrown teeth'],
+    'Hamster': ['Wet tail', 'Fur loss'],
   };
 
   @override
   void initState() {
     super.initState();
     loadPetDetails();
+    loadReminders();
   }
 
   Future<void> loadPetDetails() async {
@@ -80,19 +52,34 @@ class PetDetailsState extends State<PetDetailsPage> {
     });
   }
 
+  Future<void> loadReminders() async {
+    final data = await dbHelper.getRemindersForPet(widget.petId);
+    setState(() {
+      _reminders = data;
+    });
+  }
+
+  Future<void> addReminder() async {
+    final text = _reminderController.text.trim();
+    if (text.isNotEmpty) {
+      await dbHelper.addReminder(widget.petId, text);
+      _reminderController.clear();
+      loadReminders();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(_pet?['name'] ?? 'Pet Details')),
-      body:
-          _pet == null
-              ? Center(child: CircularProgressIndicator())
-              : Padding(
-                padding: EdgeInsets.all(16),
+      body: _pet == null
+          ? Center(child: CircularProgressIndicator())
+          : Padding(
+              padding: EdgeInsets.all(16),
+              child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Basic Details
                     Text(
                       "Name: ${_pet!['name']}",
                       style: TextStyle(
@@ -100,128 +87,155 @@ class PetDetailsState extends State<PetDetailsPage> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                    Text("Type: ${_pet!['type']}", style: TextStyle(fontSize: 18)),
+                    Text("Age: ${_pet!['age']} years", style: TextStyle(fontSize: 18)),
+
+                    SizedBox(height: 20),
+
+                    buildDropdown("Care Tips", careTipsExpanded, () {
+                      setState(() => careTipsExpanded = !careTipsExpanded);
+                    }, careTips[_pet!['type']] ?? []),
+
+                    SizedBox(height: 10),
+
+                    buildDropdown("Illness Symptoms", illnessSymptomsExpanded, () {
+                      setState(() => illnessSymptomsExpanded = !illnessSymptomsExpanded);
+                    }, illnessSymptoms[_pet!['type']] ?? []),
+
+                    SizedBox(height: 20),
+
                     Text(
-                      "Type: ${_pet!['type']}",
-                      style: TextStyle(fontSize: 18),
+                      "Add Reminder:",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
-                    Text(
-                      "Age: ${_pet!['age']} years",
-                      style: TextStyle(fontSize: 18),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _reminderController,
+                            decoration: InputDecoration(hintText: 'Enter reminder...'),
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        ElevatedButton(onPressed: addReminder, child: Text("Add")),
+                      ],
                     ),
 
                     SizedBox(height: 20),
 
-                    // Tips Dropdown
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          careTipsExpanded = !careTipsExpanded;
-                        });
-                      },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        padding: EdgeInsets.all(12),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              "Care Tips",
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Icon(
-                              careTipsExpanded
-                                  ? Icons.expand_less
-                                  : Icons.expand_more,
-                            ),
-                          ],
+                    Text("Reminders:", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    ..._reminders.map(
+                      (r) => Padding(
+                        padding: EdgeInsets.symmetric(vertical: 4),
+                        child: HoverableReminder(
+                          text: "• ${r['text']}",
+                          onTap: () async {
+                            await dbHelper.deleteReminder(r['id']);
+                            loadReminders();
+                          },
                         ),
                       ),
                     ),
-
-                    if (careTipsExpanded)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children:
-                            careTips[_pet!['type']]?.map((tip) {
-                              return Padding(
-                                padding: EdgeInsets.only(left: 12, top: 6),
-                                child: Text(
-                                  "• $tip",
-                                  style: TextStyle(fontSize: 16),
-                                ),
-                              );
-                            }).toList() ??
-                            [],
-                      ),
-
-                    SizedBox(height: 20),
-
-                    // Illness Dropdown
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          illnessSymptomsExpanded = !illnessSymptomsExpanded;
-                        });
-                      },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        padding: EdgeInsets.all(12),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              "Illness Symptoms",
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Icon(
-                              illnessSymptomsExpanded
-                                  ? Icons.expand_less
-                                  : Icons.expand_more,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    if (illnessSymptomsExpanded)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children:
-                            illnessSymptoms[_pet!['type']]?.map((symptom) {
-                              return Padding(
-                                padding: EdgeInsets.only(left: 12, top: 6),
-                                child: Text(
-                                  "• $symptom",
-                                  style: TextStyle(fontSize: 16),
-                                ),
-                              );
-                            }).toList() ??
-                            [],
-                      ),
 
                     SizedBox(height: 20),
 
                     ElevatedButton(
                       onPressed: () {
-                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => FoodWaterLogPage(
+                              petId: _pet!['id'],
+                              petName: _pet!['name'],
+                            ),
+                          ),
+                        );
                       },
+                      child: Text("Food & Water Log"),
+                    ),
+
+                    SizedBox(height: 20),
+
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
                       child: Text("Back"),
                     ),
                   ],
                 ),
               ),
+            ),
+    );
+  }
+
+  Widget buildDropdown(
+    String title,
+    bool expanded,
+    VoidCallback toggle,
+    List<String> items,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: toggle,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            padding: EdgeInsets.all(12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Icon(expanded ? Icons.expand_less : Icons.expand_more),
+              ],
+            ),
+          ),
+        ),
+        if (expanded)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: items
+                .map((item) => Padding(
+                      padding: EdgeInsets.only(left: 12, top: 6),
+                      child: Text("• $item", style: TextStyle(fontSize: 16)),
+                    ))
+                .toList(),
+          ),
+      ],
+    );
+  }
+}
+
+class HoverableReminder extends StatefulWidget {
+  final String text;
+  final VoidCallback onTap;
+
+  const HoverableReminder({Key? key, required this.text, required this.onTap}) : super(key: key);
+
+  @override
+  hoverableReminderState createState() => hoverableReminderState();
+}
+
+class hoverableReminderState extends State<HoverableReminder> {
+  bool hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => hovering = true),
+      onExit: (_) => setState(() => hovering = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Text(
+          widget.text,
+          style: TextStyle(
+            decoration: hovering ? TextDecoration.lineThrough : TextDecoration.none,
+            fontSize: 16,
+          ),
+        ),
+      ),
     );
   }
 }

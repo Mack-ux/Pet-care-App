@@ -38,6 +38,7 @@ dependencies:
   sqflite_common_ffi: ^2.3.0
   path: ^1.9.0
   path_provider:
+  intl:
 
 dev_dependencies:
   flutter_test:
