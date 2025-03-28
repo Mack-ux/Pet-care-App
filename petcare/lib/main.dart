@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'db_helper.dart';
 import 'pet_details.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
+import 'package:permission_handler/permission_handler.dart';
+
 
 void main() {
   runApp(PetApp());
@@ -29,12 +34,113 @@ class PetHomePageState extends State<PetHomePage> {
   final TextEditingController ageController = TextEditingController();
   String selectedType = 'Dog'; // Default pet dropdown
   List<Map<String, dynamic>> _pets = [];
+  final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
 
   @override
   void initState() {
     super.initState();
     loadPets();
+    _initializeNotifications();
+    tz.initializeTimeZones();
   }
+
+  Future<void> _initializeNotifications() async {
+    const AndroidInitializationSettings androidInitSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    final InitializationSettings initSettings = InitializationSettings(android: androidInitSettings);
+    await _notificationsPlugin.initialize(initSettings);
+  }
+
+  Future<void> requestExactAlarmPermission() async {
+  final permissionStatus = await Permission.notification.request();
+  if (permissionStatus.isGranted) {
+    // Proceed with scheduling the alarm
+  } else {
+    // Handle permission denial
+    print('Permission Denied!');
+  }
+}
+
+  Future<void> _scheduleNotification(String title, String body, TimeOfDay time) async {
+    
+    final now = tz.TZDateTime.now(tz.local);
+    final scheduledTime = tz.TZDateTime(tz.local, now.year, now.month, now.day, time.hour, time.minute);
+    final tz.TZDateTime tzScheduledTime = tz.TZDateTime.from(scheduledTime, tz.local);
+    
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails('reminder_id', 'Pet Reminders',
+        importance: Importance.high, priority: Priority.high);
+    const NotificationDetails notificationDetails = NotificationDetails(android: androidDetails);
+
+    await _notificationsPlugin.zonedSchedule(
+      0,
+      title,
+      body,
+      tzScheduledTime,
+      notificationDetails,
+      matchDateTimeComponents: DateTimeComponents.time,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle, 
+      
+    );
+  }
+
+  Future<void> _showReminderDialog() async {
+    String selectedType = 'Feeding';
+    TimeOfDay selectedTime = TimeOfDay.now();
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Set Reminder"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButton<String>(
+              value: selectedType,
+              onChanged: (value) {
+                setState(() => selectedType = value!);
+              },
+              items: ["Feeding", "Vet Visit", "Grooming"].map((type) {
+                return DropdownMenuItem(
+                  value: type,
+                  child: Text(type),
+                );
+              }).toList(),
+            ),
+            SizedBox(height: 10),
+            TextButton(
+              onPressed: () async {
+                final pickedTime = await showTimePicker(
+                  context: context,
+                  initialTime: selectedTime,
+                );
+                if (pickedTime != null) {
+                  setState(() => selectedTime = pickedTime);
+                }
+              },
+              child: Text("Select Time: ${selectedTime.format(context)}"),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              _scheduleNotification(
+                "Pet Reminder", 
+                "$selectedType reminder for ['Pet']}", 
+                selectedTime,
+              );
+              Navigator.pop(context);
+            },
+            child: Text("Set Reminder"),
+          ),
+        ],
+      ),
+    );
+  }
+
 
   Future<void> loadPets() async {
     final pets = await dbHelper.getPets();
@@ -91,6 +197,11 @@ class PetHomePageState extends State<PetHomePage> {
             ),
             SizedBox(height: 10),
             ElevatedButton(onPressed: addPet, child: Text('Add Pet')),
+            ElevatedButton(
+                    onPressed: _showReminderDialog,
+                    child: Text("Set Reminder"),
+                  ),
+                  SizedBox(height: 20), 
             SizedBox(height: 20),
             Expanded(
               child:
@@ -123,6 +234,8 @@ class PetHomePageState extends State<PetHomePage> {
                                     child: Text("View Details"),
                                   ),
                                   SizedBox(width: 8),
+
+                                  
                                   // Delete Button
                                   IconButton(
                                     icon: Icon(Icons.delete, color: Colors.red),
