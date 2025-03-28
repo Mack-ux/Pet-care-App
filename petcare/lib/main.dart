@@ -52,16 +52,19 @@ class PetHomePageState extends State<PetHomePage> {
 
   Future<void> requestExactAlarmPermission() async {
   final permissionStatus = await Permission.notification.request();
+  
   if (permissionStatus.isGranted) {
-    // Proceed with scheduling the alarm
+    print("Permission granted! You can schedule exact alarms.");
   } else {
-    // Handle permission denial
-    print('Permission Denied!');
+    print("Permission denied! Cannot schedule exact alarms.");
   }
 }
 
+
   Future<void> _scheduleNotification(String title, String body, TimeOfDay time) async {
     
+    await requestExactAlarmPermission();
+
     final now = tz.TZDateTime.now(tz.local);
     final scheduledTime = tz.TZDateTime(tz.local, now.year, now.month, now.day, time.hour, time.minute);
     final tz.TZDateTime tzScheduledTime = tz.TZDateTime.from(scheduledTime, tz.local);
